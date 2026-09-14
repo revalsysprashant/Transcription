@@ -21,6 +21,16 @@ Default limits are **25 MB** and **60 minutes** per recording. Microphone record
 requires localhost or HTTPS. Transcription requires an internet connection and a
 working Groq API key.
 
+## Architecture diagrams and function guide
+
+Explore the [architecture atlas](docs/architecture/README.md) for the complete
+application flow, eight visual diagrams, and explanations of all 85 named functions.
+
+- [Open the offline visual atlas](docs/architecture/index.html)
+- [Editable Excalidraw board](docs/architecture/app-flow.excalidraw)
+- [Mermaid diagrams](docs/architecture/diagrams.md)
+- [Function-by-function reference](docs/architecture/function-reference.md)
+
 ## Local Docker setup
 
 Run commands from the project root. You need Docker Engine with Docker Compose,

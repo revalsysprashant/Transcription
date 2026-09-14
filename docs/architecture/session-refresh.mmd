@@ -1,0 +1,39 @@
+flowchart TB
+  fetch["authenticatedFetch(path, options)<br/>Send cookies with request"]:::ui
+  first["Response status"]:::api
+  load["loadUser() / fetchUser()<br/>Share in-flight user check"]:::ui
+  refresh["POST /auth/refresh<br/>AuthService.refresh_tokens()"]:::auth
+  revoke["hash_refresh_token() → revoke()<br/>Conditional UPDATE, active_only=True"]:::data
+  replace["get_by_id() + new token pair<br/>create() replacement hash"]:::auth
+  commit["Commit rotation atomically<br/>Set cookies only after commit"]:::data
+  recheck["Retry GET /auth/me once<br/>Then retry original request once"]:::ui
+  expired["401 after recovery<br/>SessionExpiredError → sign in"]:::error
+  rollback["Rollback rotation<br/>No replacement cookies"]:::error
+  ok["Return response<br/>Caller checks non-401 errors"]:::ui
+  out["logout() frontend<br/>Wait for pending user request"]:::ui
+  serverout["POST /auth/logout<br/>Revoke supplied refresh session"]:::auth
+  clear["Commit → delete cookies<br/>Other sessions unaffected"]:::auth
+  fetch -->|"request"| first
+  first -->|"not 401"| ok
+  first -->|"401"| load
+  load -->|"/auth/me also 401"| refresh
+  load -->|"/auth/me valid"| recheck
+  refresh -->|"refresh cookie"| revoke
+  revoke -->|"unexpired, not revoked"| replace
+  revoke -->|"missing / invalid / expired"| rollback
+  replace -->|"replacement staged"| commit
+  replace -->|"DB failure"| rollback
+  commit -->|"new cookies"| recheck
+  recheck -->|"success"| ok
+  recheck -->|"401"| expired
+  rollback -->|"401; other errors surface"| expired
+  out -->|"avoid refresh/logout race"| serverout
+  serverout -->|"revocation committed"| clear
+  classDef ui fill:#dbeafe,stroke:#475569,color:#0f172a
+  classDef auth fill:#ede9fe,stroke:#475569,color:#0f172a
+  classDef api fill:#cffafe,stroke:#475569,color:#0f172a
+  classDef process fill:#fef3c7,stroke:#475569,color:#0f172a
+  classDef external fill:#ffe4e6,stroke:#475569,color:#0f172a
+  classDef data fill:#dcfce7,stroke:#475569,color:#0f172a
+  classDef infra fill:#e2e8f0,stroke:#475569,color:#0f172a
+  classDef error fill:#fee2e2,stroke:#475569,color:#0f172a

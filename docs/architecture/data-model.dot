@@ -1,0 +1,25 @@
+digraph G {
+graph [rankdir=TB, bgcolor="#ffffff", pad=0.3, nodesep=0.38, ranksep=0.7, splines=spline, fontname="DejaVu Sans", labelloc=t];
+node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=16, margin="0.18,0.14", color="#64748b", fontcolor="#0f172a", penwidth=1.2];
+edge [fontname="DejaVu Sans", fontsize=11, color="#64748b", fontcolor="#475569", arrowsize=0.7];
+user [label="users\nid UUID PK · google_id unique\nemail · name · avatar · timestamps",fillcolor="#dcfce7"];
+session [label="refresh_sessions\nid UUID PK · user_id FK\ntoken_hash unique · expires_at\nrevoked_at · created_at",fillcolor="#dcfce7"];
+job [label="transcriptions\nid UUID PK · user_id FK\noriginal_storage_key · exact bytes\ntext · segments JSONB · language\nstatus · duration · processing time",fillcolor="#dcfce7"];
+file [label="Original audio file\nuser_id / job_id.audio\nStored outside PostgreSQL",fillcolor="#dcfce7"];
+meta [label="AudioMetadata\nPositive finite duration\nsample rate · channels · codec",fillcolor="#cffafe"];
+normalized [label="NormalizedAudio\nMetadata + speech ranges / clips\nTranscriptionResult",fillcolor="#cffafe"];
+response [label="SavedAudio upload response\nReceivedAudio + id + status",fillcolor="#cffafe"];
+public [label="SavedTranscription retrieval\nPublic metadata + size_mb\nNo internal storage key",fillcolor="#cffafe"];
+segment [label="TranscriptSegment\nNonempty text · finite times\ncheck_time_order(): end > start",fillcolor="#cffafe"];
+clip [label="ClipTranscription\nNonempty text + segments\nOptional detected language",fillcolor="#cffafe"];
+statuses [label="Enum: UPLOADED / PROCESSING\nCOMPLETED / FAILED\nNo persisted progress transitions yet",fillcolor="#fee2e2"];
+user -> session [label="one to many"];
+user -> job [label="one to many"];
+job -> file [label="relative storage key"];
+meta -> normalized [label="extends metadata"];
+normalized -> response [label="nested result"];
+job -> public [label="model_validate(from_attributes)"];
+segment -> clip [label="one or more segments"];
+clip -> normalized [label="merged with original offsets"];
+statuses -> job [label="status column"];
+}

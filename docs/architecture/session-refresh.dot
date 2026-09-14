@@ -1,0 +1,35 @@
+digraph G {
+graph [rankdir=TB, bgcolor="#ffffff", pad=0.3, nodesep=0.38, ranksep=0.7, splines=spline, fontname="DejaVu Sans", labelloc=t];
+node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=16, margin="0.18,0.14", color="#64748b", fontcolor="#0f172a", penwidth=1.2];
+edge [fontname="DejaVu Sans", fontsize=11, color="#64748b", fontcolor="#475569", arrowsize=0.7];
+fetch [label="authenticatedFetch(path, options)\nSend cookies with request",fillcolor="#dbeafe"];
+first [label="Response status",fillcolor="#cffafe"];
+load [label="loadUser() / fetchUser()\nShare in-flight user check",fillcolor="#dbeafe"];
+refresh [label="POST /auth/refresh\nAuthService.refresh_tokens()",fillcolor="#ede9fe"];
+revoke [label="hash_refresh_token() → revoke()\nConditional UPDATE, active_only=True",fillcolor="#dcfce7"];
+replace [label="get_by_id() + new token pair\ncreate() replacement hash",fillcolor="#ede9fe"];
+commit [label="Commit rotation atomically\nSet cookies only after commit",fillcolor="#dcfce7"];
+recheck [label="Retry GET /auth/me once\nThen retry original request once",fillcolor="#dbeafe"];
+expired [label="401 after recovery\nSessionExpiredError → sign in",fillcolor="#fee2e2"];
+rollback [label="Rollback rotation\nNo replacement cookies",fillcolor="#fee2e2"];
+ok [label="Return response\nCaller checks non-401 errors",fillcolor="#dbeafe"];
+out [label="logout() frontend\nWait for pending user request",fillcolor="#dbeafe"];
+serverout [label="POST /auth/logout\nRevoke supplied refresh session",fillcolor="#ede9fe"];
+clear [label="Commit → delete cookies\nOther sessions unaffected",fillcolor="#ede9fe"];
+fetch -> first [label="request"];
+first -> ok [label="not 401"];
+first -> load [label="401"];
+load -> refresh [label="/auth/me also 401"];
+load -> recheck [label="/auth/me valid"];
+refresh -> revoke [label="refresh cookie"];
+revoke -> replace [label="unexpired, not revoked"];
+revoke -> rollback [label="missing / invalid / expired"];
+replace -> commit [label="replacement staged"];
+replace -> rollback [label="DB failure"];
+commit -> recheck [label="new cookies"];
+recheck -> ok [label="success"];
+recheck -> expired [label="401"];
+rollback -> expired [label="401; other errors surface"];
+out -> serverout [label="avoid refresh/logout race"];
+serverout -> clear [label="revocation committed"];
+}

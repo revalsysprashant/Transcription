@@ -1,0 +1,29 @@
+flowchart TB
+  user["users<br/>id UUID PK · google_id unique<br/>email · name · avatar · timestamps"]:::data
+  session["refresh_sessions<br/>id UUID PK · user_id FK<br/>token_hash unique · expires_at<br/>revoked_at · created_at"]:::data
+  job["transcriptions<br/>id UUID PK · user_id FK<br/>original_storage_key · exact bytes<br/>text · segments JSONB · language<br/>status · duration · processing time"]:::data
+  file["Original audio file<br/>user_id / job_id.audio<br/>Stored outside PostgreSQL"]:::data
+  meta["AudioMetadata<br/>Positive finite duration<br/>sample rate · channels · codec"]:::api
+  normalized["NormalizedAudio<br/>Metadata + speech ranges / clips<br/>TranscriptionResult"]:::api
+  response["SavedAudio upload response<br/>ReceivedAudio + id + status"]:::api
+  public["SavedTranscription retrieval<br/>Public metadata + size_mb<br/>No internal storage key"]:::api
+  segment["TranscriptSegment<br/>Nonempty text · finite times<br/>check_time_order(): end &gt; start"]:::api
+  clip["ClipTranscription<br/>Nonempty text + segments<br/>Optional detected language"]:::api
+  statuses["Enum: UPLOADED / PROCESSING<br/>COMPLETED / FAILED<br/>No persisted progress transitions yet"]:::error
+  user -->|"one to many"| session
+  user -->|"one to many"| job
+  job -->|"relative storage key"| file
+  meta -->|"extends metadata"| normalized
+  normalized -->|"nested result"| response
+  job -->|"model_validate(from_attributes)"| public
+  segment -->|"one or more segments"| clip
+  clip -->|"merged with original offsets"| normalized
+  statuses -->|"status column"| job
+  classDef ui fill:#dbeafe,stroke:#475569,color:#0f172a
+  classDef auth fill:#ede9fe,stroke:#475569,color:#0f172a
+  classDef api fill:#cffafe,stroke:#475569,color:#0f172a
+  classDef process fill:#fef3c7,stroke:#475569,color:#0f172a
+  classDef external fill:#ffe4e6,stroke:#475569,color:#0f172a
+  classDef data fill:#dcfce7,stroke:#475569,color:#0f172a
+  classDef infra fill:#e2e8f0,stroke:#475569,color:#0f172a
+  classDef error fill:#fee2e2,stroke:#475569,color:#0f172a

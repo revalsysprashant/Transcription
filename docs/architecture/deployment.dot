@@ -1,0 +1,32 @@
+digraph G {
+graph [rankdir=TB, bgcolor="#ffffff", pad=0.3, nodesep=0.38, ranksep=0.7, splines=spline, fontname="DejaVu Sans", labelloc=t];
+node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=16, margin="0.18,0.14", color="#64748b", fontcolor="#0f172a", penwidth=1.2];
+edge [fontname="DejaVu Sans", fontsize=11, color="#64748b", fontcolor="#475569", arrowsize=0.7];
+env [label="Environment setup\ninit-env.py → .env.production\nDOMAIN + Google/Groq + new secrets",fillcolor="#e2e8f0"];
+package [label="package.sh\nSource archive; no secrets or audio",fillcolor="#e2e8f0"];
+server [label="Future Ubuntu server\ninstall-docker-ubuntu.sh",fillcolor="#e2e8f0"];
+compose [label="compose.production.yml\nBuild images and start services",fillcolor="#e2e8f0"];
+db [label="PostgreSQL 17\npg_isready health check",fillcolor="#dcfce7"];
+migrate [label="alembic upgrade head\nUsers + transcriptions → sessions",fillcolor="#dcfce7"];
+api [label="Uvicorn → FastAPI\nget_settings() + get_db()\n/health confirms process only",fillcolor="#cffafe"];
+web [label="Caddy\nStatic Vite build + API proxy\nStarts after backend healthy",fillcolor="#e2e8f0"];
+dns [label="Public domain + DNS\nPorts 80 / 443 reachable\nGoogle authorized HTTPS origin",fillcolor="#ffe4e6"];
+tls [label="Automatic HTTPS\nCertificates persist in volume\nSecure cookies enabled",fillcolor="#ede9fe"];
+volumes [label="Named volumes\nDatabase · audio · certificates\nSurvive container replacement",fillcolor="#dcfce7"];
+local [label="Local Docker alternative\n127.0.0.1:8080 → Caddy :80\nSeparate DB; cookie_secure=false",fillcolor="#e2e8f0"];
+shutdown [label="lifespan() shutdown\nDispose database engine",fillcolor="#cffafe"];
+env -> compose [label="configuration"];
+package -> server [label="copy archive + env separately"];
+server -> compose [label="Docker installed"];
+compose -> db [label="start first"];
+db -> migrate [label="healthy"];
+migrate -> api [label="migration success"];
+api -> web [label="healthy"];
+dns -> tls [label="certificate prerequisites"];
+tls -> web [label="HTTPS origin"];
+db -> volumes [label="database"];
+api -> volumes [label="original audio"];
+web -> volumes [label="certificates"];
+compose -> local [label="use compose.yml for local run"];
+api -> shutdown [label="process shutdown"];
+}

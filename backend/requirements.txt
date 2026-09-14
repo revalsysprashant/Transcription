@@ -1,0 +1,69 @@
+# -----------------------------
+# Web API
+# -----------------------------
+fastapi
+uvicorn[standard]
+python-multipart
+
+# -----------------------------
+# Configuration / Validation
+# -----------------------------
+pydantic
+pydantic-settings
+email-validator
+python-dotenv
+
+# -----------------------------
+# Database
+# -----------------------------
+sqlalchemy
+asyncpg
+alembic
+
+# -----------------------------
+# Authentication / Security
+# -----------------------------
+google-auth
+requests
+python-jose[cryptography]
+cryptography
+
+# -----------------------------
+# HTTP Clients
+# -----------------------------
+httpx
+
+# -----------------------------
+# Background Jobs / Redis
+# -----------------------------
+celery
+redis
+
+# -----------------------------
+# Object Storage
+# -----------------------------
+boto3
+
+# -----------------------------
+# Speech-to-Text
+# -----------------------------
+groq
+
+# -----------------------------
+# Testing
+# -----------------------------
+pytest
+pytest-asyncio
+pytest-cov
+
+# -----------------------------
+# Development / Code Quality
+# -----------------------------
+ruff
+
+# Speech detection (use uv sync for CPU-specific torch wheels configured in pyproject.toml)
+silero-vad>=6,<7
+numpy
+torch
+torchaudio
+onnxruntime

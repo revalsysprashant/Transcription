@@ -1,0 +1,237 @@
+{
+  "info": {
+    "name": "transcription-api",
+    "description": null,
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "test",
+      "item": [
+        {
+          "name": "auth",
+          "item": [
+            {
+              "name": "get current user",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "description": "",
+                "url": {
+                  "raw": "{{URL}}/auth/me",
+                  "protocol": "",
+                  "host": [
+                    "{{URL}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "me"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              }
+            },
+            {
+              "name": "google-login",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "description": "",
+                "url": {
+                  "raw": "{{URL}}/auth/google",
+                  "protocol": "",
+                  "host": [
+                    "{{URL}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "google"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"credential\":\"eyJhbGciOiJSUzI1NiIsImtpZCI6ImYxMGY4NzQwNWE5NzljMWRmMzZkZjI2NjA2NzM0ZjMzY2Q4NWMyNzEiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiI1ODAyMTA5MDA1MTMtcnJqOHRpbDlkbHIwNXJ0bjlzM2RhN3RyNTRmOWpqdHYuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiI1ODAyMTA5MDA1MTMtcnJqOHRpbDlkbHIwNXJ0bjlzM2RhN3RyNTRmOWpqdHYuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDYyMjEwOTIzMjQxNzI5MjY4MjkiLCJlbWFpbCI6Inlhc2hnb3ZpbmQxMjNAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsIm5iZiI6MTc4OTIwNDkxMSwibmFtZSI6Illhc2ggR292aW5kIiwicGljdHVyZSI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0lDLTZQX3BkWEd2R3ZsXzFRRzdmaXIxZFBXcUFrZkRrNGswdzVzcURhY0NiMFJfRFRHPXM5Ni1jIiwiZ2l2ZW5fbmFtZSI6Illhc2giLCJmYW1pbHlfbmFtZSI6IkdvdmluZCIsImlhdCI6MTc4OTIwNTIxMSwiZXhwIjoxNzg5MjA4ODExLCJqdGkiOiIxNDZlZjhiYmZmYTJmZDNkYmNjODNlZThlNDY0MWRhYjYzZGVlNDkwIn0.ogV9W-pqYx1v2qoemSUsCuiz3969Mya16O-WxLt4WIQNPYCiIRgaOd2ecCxSUuUkIlj-byf7F891NsLHHPqpS3VrqvFkJ3j2zdavXnVhMrgKWmTY7rrOLGgQqAU_11oXSvJgDd0VA0PYFKX5LlOOadEompP_ghbqDaSM1DXZa6v-stusAvXT92MxNEZJcj6wTOCo7Ok7h1jEPRliMqfv4wtzCJiFEzp5Y4PZqzv9zcPOk28D9NLdSOa3Zx-WdqCZOp3S0zLLeaA6tSjmUi9h8yVZNfFOoGZ6K44vWf4snpBdtV8cgYdPDqTzOAf0HflHk7xRBJDrAnWy1cdb5hJkpA\"}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "name": "refresh tokens",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "description": "",
+                "url": {
+                  "raw": "{{URL}}/auth/refresh",
+                  "protocol": "",
+                  "host": [
+                    "{{URL}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "refresh"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              }
+            },
+            {
+              "name": "logout user",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "description": "",
+                "url": {
+                  "raw": "{{URL}}/auth/logout",
+                  "protocol": "",
+                  "host": [
+                    "{{URL}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "logout"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transcription",
+          "item": [
+            {
+              "name": "Upload audio file",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "",
+                "url": {
+                  "raw": "{{URL}}/audio/upload",
+                  "protocol": "",
+                  "host": [
+                    "{{URL}}"
+                  ],
+                  "path": [
+                    "audio",
+                    "upload"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "disabled": false,
+                      "type": "file",
+                      "description": "",
+                      "src": "/home/yg/Downloads/that-is-correct-cheesy-gameshow-voice-male-dan-barracuda-1-00-01.mp3",
+                      "contentType": "audio/mpeg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get a audio by id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "",
+                "url": {
+                  "raw": "{{URL}}/audio/f7874bac-ac7c-45f0-8564-a1dfc43e5394",
+                  "protocol": "",
+                  "host": [
+                    "{{URL}}"
+                  ],
+                  "path": [
+                    "audio",
+                    "f7874bac-ac7c-45f0-8564-a1dfc43e5394"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              }
+            },
+            {
+              "name": "export audio ",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "",
+                "url": {
+                  "raw": "{{URL}}/audio/f7874bac-ac7c-45f0-8564-a1dfc43e5394/export/txt",
+                  "protocol": "",
+                  "host": [
+                    "{{URL}}"
+                  ],
+                  "path": [
+                    "audio",
+                    "f7874bac-ac7c-45f0-8564-a1dfc43e5394",
+                    "export",
+                    "txt"
+                  ],
+                  "query": [],
+                  "variable": []
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "URL",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}

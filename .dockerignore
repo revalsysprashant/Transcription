@@ -1,0 +1,12 @@
+**/.env*
+**/.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+.git
+backend/app/storage
+backend/tests
+deploy/*.tar.gz

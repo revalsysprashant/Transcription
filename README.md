@@ -17,6 +17,12 @@ speech clips, and maps timestamps back to the original recording. Processing run
 during the upload request; there is no background queue or WebSocket job stream.
 Temporary processing files are removed after the request.
 
+When speech detection retains less than 60% of a recording, the backend sends the
+complete normalized audio instead if it is at most 20 MB. This protects music and
+other continuous audio that a voice detector can classify poorly. Larger files
+continue through the sentence-aware clipping path. Both thresholds can be changed
+with `FULL_AUDIO_FALLBACK_COVERAGE_RATIO` and `FULL_AUDIO_FALLBACK_MAX_MB`.
+
 Default limits are **25 MB** and **60 minutes** per recording. Microphone recording
 requires localhost or HTTPS. Transcription requires an internet connection and a
 working Groq API key.
@@ -119,10 +125,11 @@ You need Python 3.12+, uv, Node.js compatible with the frontend dependencies,
 pnpm, and FFmpeg/FFprobe on your PATH. The backend lockfile selects CPU builds for
 the speech-processing libraries.
 
-Start the development PostgreSQL container:
+From the project root, start the development PostgreSQL container (create
+`.env.docker` as described above first):
 
 ```bash
-docker compose -f backend/compose.yml up -d
+docker compose --env-file .env.docker --profile development up -d --wait dev-db
 ```
 
 Set this development database URL in `backend/.env`, along with your Google/Groq
@@ -212,7 +219,7 @@ node --test tests/*.test.mjs
 
 Both Docker images built successfully during deployment preparation. Production
 Compose and Caddy configuration validation passed, the local HTTP health endpoint
-responded successfully, and all 67 backend tests passed. These checks do not
+responded successfully, and all 76 backend tests passed. These checks do not
 replace testing Google login and a real transcription on the deployed hostname.
 
 ## Troubleshooting

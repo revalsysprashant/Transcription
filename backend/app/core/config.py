@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr | None = None
     groq_transcription_model: str = "whisper-large-v3-turbo"
 
+    # Keep sentence-sized speech together before sending audio to Whisper.
+    vad_min_speech_duration_ms: int = Field(default=250, ge=0)
+    vad_min_silence_duration_ms: int = Field(default=700, ge=0)
+    vad_speech_pad_ms: int = Field(default=300, ge=0)
+    speech_merge_gap_seconds: float = Field(default=1.0, ge=0)
+    speech_clip_min_seconds: float = Field(default=3.0, gt=0)
+    speech_clip_max_seconds: float = Field(default=30.0, gt=0)
+    speech_clip_overlap_seconds: float = Field(default=0.5, ge=0)
+    full_audio_fallback_coverage_ratio: float = Field(default=0.6, ge=0, le=1)
+    full_audio_fallback_max_mb: float = Field(default=20.0, gt=0)
+
     jwt_secret: str
     jwt_algorithm: str = "HS256"
 

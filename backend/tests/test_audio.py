@@ -156,7 +156,9 @@ async def test_upload_transcription_response(auth_client, monkeypatch, provider_
     if not provider_fails:
         result = response.json()["normalized"]["transcription"]
         assert result["text"] == "Hello."
-        assert result["segments"] == [{"start": 1.0, "end": 1.5, "text": "Hello."}]
+        # The one-second VAD hit is expanded to a three-second context clip
+        # beginning at zero, so provider-relative timestamps use that real start.
+        assert result["segments"] == [{"start": 0.0, "end": 0.5, "text": "Hello."}]
     assert paths and all(not path.exists() for path in paths)
     if not provider_fails:
         saved = await client.get(f"/audio/{response.json()['id']}")

@@ -9,8 +9,13 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.repositories.audio import normalize_audio, probe_audio
-from app.repositories.speech import detect_speech, extract_speech_clips
-from app.schemas.audio import NormalizedAudio, ReceivedAudio, SavedAudio
+from app.repositories.speech import (
+    detect_speech,
+    extract_speech_clips,
+    prepare_speech_ranges,
+    should_use_full_audio,
+)
+from app.schemas.audio import NormalizedAudio, ReceivedAudio, SavedAudio, SpeechRange
 from app.services.storage import AudioStorageService
 from app.services.transcription import TranscriptionService
 
@@ -131,7 +136,14 @@ class AudioService:
             # Recheck decoded duration before loading samples into the speech model.
             AudioService.validate_duration(metadata.duration)
             # Detect speech before the temporary WAV is deleted by the with block.
-            speech_ranges = await run_in_threadpool(detect_speech, normalized_path)
+            detected_ranges = await run_in_threadpool(detect_speech, normalized_path)
+            speech_ranges = await run_in_threadpool(
+                prepare_speech_ranges, detected_ranges, metadata.duration
+            )
+            if should_use_full_audio(
+                speech_ranges, metadata.duration, normalized_path.stat().st_size
+            ):
+                speech_ranges = [SpeechRange(start=0, end=metadata.duration)]
             # Clips must be used here, before this temporary folder is deleted.
             speech_clips = await run_in_threadpool(
                 extract_speech_clips, normalized_path, speech_ranges, folder

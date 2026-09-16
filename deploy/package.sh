@@ -5,10 +5,10 @@ cd "$(dirname "$0")/.."
 tar -czf deploy/transcription.tar.gz \
   --exclude='__pycache__' --exclude='*.pyc' --exclude='backend/app/storage' \
   compose.production.yml \
-  backend/Dockerfile backend/.dockerignore backend/pyproject.toml backend/uv.lock \
+  Dockerfile .dockerignore backend/pyproject.toml backend/uv.lock \
   backend/alembic.ini backend/alembic \
   backend/app \
-  frontend/Dockerfile frontend/.dockerignore frontend/Caddyfile \
+  frontend/Caddyfile \
   frontend/package.json frontend/pnpm-lock.yaml frontend/index.html \
   frontend/tsconfig.json frontend/tsconfig.app.json frontend/tsconfig.node.json \
   frontend/vite.config.ts frontend/src \

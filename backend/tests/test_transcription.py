@@ -118,3 +118,33 @@ async def test_no_speech_skips_provider(tmp_path, monkeypatch):
     result = await TranscriptionService.transcribe_clips(tmp_path, [])
     assert result.text == "" and result.segments == []
     provider.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_overlap_text_and_timestamps_are_deduplicated(tmp_path, monkeypatch):
+    """Remove repeated overlap words and omit timeline regions already emitted."""
+    clips = [
+        SpeechClip(filename="one.wav", start=0, end=3, duration=3, size_mb=0.1),
+        SpeechClip(filename="two.wav", start=2.5, end=5.5, duration=3, size_mb=0.1),
+    ]
+    provider = AsyncMock(
+        side_effect=[
+            ClipTranscription(
+                text="We need more context.",
+                language="english",
+                segments=[{"start": 0, "end": 3, "text": "We need more context."}],
+            ),
+            ClipTranscription(
+                text="more context, before deciding.",
+                language="english",
+                segments=[
+                    {"start": 0, "end": 0.4, "text": "more context,"},
+                    {"start": 0.4, "end": 2, "text": "before deciding."},
+                ],
+            ),
+        ]
+    )
+    monkeypatch.setattr(GroqProvider, "transcribe", provider)
+    result = await TranscriptionService.transcribe_clips(tmp_path, clips)
+    assert result.text == "We need more context. before deciding."
+    assert [(item.start, item.end) for item in result.segments] == [(0, 3), (3, 4.5)]

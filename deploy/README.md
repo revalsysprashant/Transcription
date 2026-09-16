@@ -1,7 +1,9 @@
 # AWS-ready Docker deployment
 
 The production configuration is prepared, but no AWS resources have been created.
-Local development uses `compose.yml`; production uses `compose.production.yml`.
+All Docker commands run from the repository root. One root `Dockerfile` builds
+the backend and web targets. Local development uses `compose.yml`; production
+uses `compose.production.yml`. No Dockerfile or Compose file is needed in backend/.
 Production creates a separate, initially empty database and audio volume. It does
 not transfer existing users or recordings from your computer.
 
@@ -92,7 +94,20 @@ remain consistent. Do not run `down -v`: it deletes the persistent volumes.
 Back up both PostgreSQL and the audio volume before schema-changing updates;
 Docker volumes survive container replacement but are not off-server backups.
 
+## Stop and restart
+
+Run these commands from `~/transcription` on EC2:
+
+```bash
+sudo docker compose --env-file .env.production -f compose.production.yml restart
+sudo docker compose --env-file .env.production -f compose.production.yml down
+sudo docker compose --env-file .env.production -f compose.production.yml up -d --build --wait
+```
+
+`down` retains the database and audio volumes; `down -v` deletes them.
+
 ## Sources
 
+- AWS security group rules: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-rules-reference.html
 - Docker Ubuntu installation: https://docs.docker.com/engine/install/ubuntu/
 - Caddy HTTPS prerequisites: https://caddyserver.com/docs/automatic-https

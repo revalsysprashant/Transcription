@@ -41,6 +41,120 @@ def test_vad_sample_positions_become_seconds(tmp_path):
     assert tuple(samples.shape) == (16000,)
     assert samples.abs().max().item() == 0
     assert detector.call_args.kwargs["sampling_rate"] == 16000
+    assert detector.call_args.kwargs["min_speech_duration_ms"] == 250
+    assert detector.call_args.kwargs["min_silence_duration_ms"] == 700
+    assert detector.call_args.kwargs["speech_pad_ms"] == 300
+
+
+def test_prepare_ranges_merges_sentence_pauses_and_expands_short_audio():
+    """Join nearby words and retain surrounding source context for short speech."""
+    from app.repositories.speech import prepare_speech_ranges
+    from app.schemas.audio import SpeechRange
+
+    result = prepare_speech_ranges(
+        [SpeechRange(start=4, end=4.5), SpeechRange(start=5.2, end=6)],
+        10,
+        merge_gap=1,
+        minimum_duration=3,
+        maximum_duration=30,
+        hard_split_overlap=0.5,
+    )
+    assert result == [SpeechRange(start=3.5, end=6.5)]
+
+
+def test_prepare_ranges_prefers_silence_boundary_before_maximum():
+    """Do not merge across a real pause when the result would exceed clip size."""
+    from app.repositories.speech import prepare_speech_ranges
+    from app.schemas.audio import SpeechRange
+
+    result = prepare_speech_ranges(
+        [SpeechRange(start=0, end=18), SpeechRange(start=18.5, end=32)],
+        40,
+        merge_gap=1,
+        minimum_duration=3,
+        maximum_duration=30,
+        hard_split_overlap=0.5,
+    )
+    assert result == [SpeechRange(start=0, end=18), SpeechRange(start=18.5, end=32)]
+
+
+def test_prepare_ranges_overlaps_only_hard_splits():
+    """Long uninterrupted speech gets bounded chunks with explicit context overlap."""
+    from app.repositories.speech import prepare_speech_ranges
+    from app.schemas.audio import SpeechRange
+
+    result = prepare_speech_ranges(
+        [SpeechRange(start=2, end=67)],
+        70,
+        merge_gap=1,
+        minimum_duration=3,
+        maximum_duration=30,
+        hard_split_overlap=0.5,
+    )
+    assert result == [
+        SpeechRange(start=2, end=32),
+        SpeechRange(start=31.5, end=61.5),
+        SpeechRange(start=61, end=67),
+    ]
+
+
+def test_prepare_ranges_clamps_context_to_recording():
+    from app.repositories.speech import prepare_speech_ranges
+    from app.schemas.audio import SpeechRange
+
+    assert prepare_speech_ranges(
+        [SpeechRange(start=0.1, end=0.4)],
+        2,
+        minimum_duration=3,
+        maximum_duration=30,
+    ) == [SpeechRange(start=0, end=2)]
+
+
+def test_low_vad_coverage_uses_full_audio_when_file_is_safe():
+    from app.repositories.speech import should_use_full_audio
+    from app.schemas.audio import SpeechRange
+
+    assert should_use_full_audio(
+        [SpeechRange(start=10, end=40)],
+        audio_duration=100,
+        normalized_size_bytes=10_000_000,
+        minimum_coverage_ratio=0.6,
+        maximum_size_mb=20,
+    )
+
+
+def test_low_vad_coverage_keeps_clips_when_full_file_is_too_large():
+    from app.repositories.speech import should_use_full_audio
+    from app.schemas.audio import SpeechRange
+
+    assert not should_use_full_audio(
+        [SpeechRange(start=10, end=40)],
+        audio_duration=100,
+        normalized_size_bytes=20_000_001,
+        minimum_coverage_ratio=0.6,
+        maximum_size_mb=20,
+    )
+
+
+def test_silence_does_not_trigger_full_audio_fallback():
+    from app.repositories.speech import should_use_full_audio
+
+    assert not should_use_full_audio(
+        [],
+        audio_duration=100,
+        normalized_size_bytes=1_000_000,
+        minimum_coverage_ratio=0.6,
+        maximum_size_mb=20,
+    )
+
+
+def test_coverage_counts_overlaps_once():
+    from app.repositories.speech import speech_coverage_seconds
+    from app.schemas.audio import SpeechRange
+
+    assert speech_coverage_seconds(
+        [SpeechRange(start=0, end=30), SpeechRange(start=29.5, end=40)]
+    ) == 40
 
 
 @pytest.mark.parametrize("channels,sample_rate", [(2, 16000), (1, 44100)])
@@ -83,6 +197,35 @@ def test_extract_clips_preserves_samples_and_offsets(tmp_path):
         assert clip.start == start / 16000
         assert clip.end == end / 16000
     assert source.read_bytes() == original
+
+
+def test_extract_clips_allows_intentional_hard_split_overlap(tmp_path):
+    """Copy overlapping source ranges used to preserve hard-split context."""
+    from app.repositories.speech import extract_speech_clips
+    from app.schemas.audio import SpeechRange
+
+    source = tmp_path / "source.wav"
+    write_wav(source)
+    clips = extract_speech_clips(
+        source,
+        [SpeechRange(start=0, end=0.6), SpeechRange(start=0.5, end=1)],
+        tmp_path,
+    )
+    assert [(clip.start, clip.end) for clip in clips] == [(0, 0.6), (0.5, 1)]
+
+
+def test_extract_clips_rejects_out_of_order_overlap(tmp_path):
+    from app.repositories.speech import extract_speech_clips
+    from app.schemas.audio import SpeechRange
+
+    source = tmp_path / "source.wav"
+    write_wav(source)
+    with pytest.raises(ValueError, match="ordered"):
+        extract_speech_clips(
+            source,
+            [SpeechRange(start=0.5, end=1), SpeechRange(start=0.1, end=0.6)],
+            tmp_path,
+        )
 
 
 def test_extract_no_speech_creates_no_clips(tmp_path):
@@ -148,5 +291,43 @@ async def test_service_extracts_then_cleans_clips(tmp_path, monkeypatch):
         ),
     )
     result = await AudioService.get_normalized_metadata(source)
-    assert result.speech_clips[0].duration == 0.4
+    assert result.speech_clips[0].duration == 1.0
     assert all(not path.exists() for path in created_paths)
+
+
+@pytest.mark.asyncio
+async def test_service_replaces_sparse_vad_ranges_with_full_audio(tmp_path, monkeypatch):
+    """Use one complete source range when the low-coverage fallback is selected."""
+    from unittest.mock import AsyncMock
+
+    from app.schemas.audio import SpeechRange
+    from app.schemas.transcription import TranscriptionResult
+    from app.services.audio import AudioService
+
+    source = tmp_path / "source.wav"
+    write_wav(source)
+    extracted_ranges = []
+
+    def capture_extraction(_path, ranges, _folder):
+        extracted_ranges.extend(ranges)
+        return []
+
+    monkeypatch.setattr(
+        "app.services.audio.detect_speech",
+        lambda _path: [SpeechRange(start=0.2, end=0.4)],
+    )
+    monkeypatch.setattr("app.services.audio.should_use_full_audio", lambda *_args: True)
+    monkeypatch.setattr("app.services.audio.extract_speech_clips", capture_extraction)
+    monkeypatch.setattr(
+        "app.services.audio.TranscriptionService.transcribe_clips",
+        AsyncMock(
+            return_value=TranscriptionResult(
+                text="", detected_languages=[], segments=[], processing_time_ms=0
+            )
+        ),
+    )
+
+    result = await AudioService.get_normalized_metadata(source)
+
+    assert extracted_ranges == [SpeechRange(start=0, end=1)]
+    assert result.speech_ranges == [SpeechRange(start=0, end=1)]

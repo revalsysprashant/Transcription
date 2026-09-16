@@ -178,10 +178,10 @@ endpoint is wired into this implementation.
 - `compose.production.yml` enables secure cookies and Caddy HTTPS. Only web ports
   are published; API and database remain inside the Docker network. It also adds
   persistent certificate/config volumes and log rotation.
-- `backend/Dockerfile` installs FFmpeg and the locked Python environment, copies
+- the root `Dockerfile` backend target installs FFmpeg and the locked Python environment, copies
   application/migration code, and runs as a non-root app user. Compose's startup
   command runs migrations before Uvicorn.
-- `frontend/Dockerfile` builds Vite with the Google client ID and same-origin API
+- the root `Dockerfile` web target builds Vite with the Google client ID and same-origin API
   base, then serves the static output from Caddy. The client ID is public configuration;
   server secrets are not frontend build arguments.
 - `deploy/init-env.py` reads Google/Groq settings from the local backend environment,

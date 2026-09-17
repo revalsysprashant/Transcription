@@ -27,15 +27,44 @@ Default limits are **25 MB** and **60 minutes** per recording. Microphone record
 requires localhost or HTTPS. Transcription requires an internet connection and a
 working Groq API key.
 
-## Architecture diagrams and function guide
+## App flow
 
-Explore the [architecture atlas](docs/architecture/README.md) for the complete
-application flow, eight visual diagrams, and explanations of all 85 named functions.
+Open [app-flow.excalidraw](app-flow.excalidraw) in Excalidraw for one editable
+flow covering sign-in, audio processing, transcription, storage, and results.
 
-- [Open the offline visual atlas](docs/architecture/index.html)
-- [Editable Excalidraw board](docs/architecture/app-flow.excalidraw)
-- [Mermaid diagrams](docs/architecture/diagrams.md)
-- [Function-by-function reference](docs/architecture/function-reference.md)
+## GitHub and secrets
+
+The repository is `https://github.com/revalsysprashant/Transcription`.
+From the repository root, review and push changes:
+
+```bash
+git remote -v
+git status
+git add -A
+git diff --cached --stat
+# Review staged content locally before committing; do not share secret values.
+git diff --cached
+git commit -m "Describe your changes"
+SSH_ASKPASS_REQUIRE=never git push -u origin main
+```
+
+SSH uses the key registered with your GitHub account. Its passphrase is the one
+you chose when creating the key, not your GitHub password.
+
+The root `.gitignore` excludes environment files, private keys, dependencies,
+build output, recordings, comparison output, and deployment archives. Sanitized
+`.env.example` templates can be committed. Never commit real credentials.
+Ignoring a file does not untrack it or remove earlier committed copies.
+
+If GitHub blocks a push for a secret, remove the secret from every affected
+commit before retrying; a new deletion commit is insufficient. Preserve local
+configuration before rewriting history, and coordinate any rewrite of already
+published commits. Do not bypass push protection for a real credential. Rotate
+exposed credentials and update each environment that uses them; see the
+[deployment guide](deploy/README.md#rotate-the-groq-api-key).
+
+A GitHub push does not deploy the website. Automatic deployment is not configured;
+follow the [manual update steps](deploy/README.md#logs-and-updates).
 
 ## Local Docker setup
 
@@ -164,10 +193,10 @@ it to an empty string so requests use the website's own origin.
 The development database, local Docker database, and production database are
 separate. Switching between them does not migrate existing users or recordings.
 
-## Production / AWS preparation
+## Production / AWS deployment
 
-Production configuration is ready for a single Ubuntu server. No AWS resources
-have been created by this setup. See **[the deployment guide](deploy/README.md)**
+The app has been deployed to an Ubuntu EC2 server using an uploaded archive.
+See **[the deployment guide](deploy/README.md)**
 for server installation, DNS, firewall rules, Google sign-in, HTTPS, transfer, and
 startup commands.
 
@@ -176,7 +205,7 @@ startup commands.
 | [compose.yml](compose.yml) | Local Docker stack at localhost:8080 |
 | [compose.production.yml](compose.production.yml) | Public HTTPS stack with secure cookies and private API/database ports |
 | [deploy/Caddyfile](deploy/Caddyfile) | HTTPS, certificate renewal, frontend serving, and API proxy |
-| [deploy/install-docker-ubuntu.sh](deploy/install-docker-ubuntu.sh) | Docker and Compose installer for the future Ubuntu server |
+| [deploy/install-docker-ubuntu.sh](deploy/install-docker-ubuntu.sh) | Docker and Compose installer for Ubuntu |
 | [deploy/init-env.py](deploy/init-env.py) | Creates production secrets without overwriting an existing file |
 | [deploy/package.sh](deploy/package.sh) | Creates a transfer archive without secrets or recordings |
 
@@ -198,9 +227,10 @@ docker compose --env-file .env.production -f compose.production.yml config --qui
 bash deploy/package.sh
 ```
 
-The archive is written to `deploy/transcription.tar.gz`. Production creates fresh
-storage volumes. HTTPS issuance and public Google login remain unverified until
-DNS points to a server and the public origin is registered with Google.
+The archive is written to `deploy/transcription.tar.gz` and is excluded from Git.
+A first deployment creates storage volumes; subsequent deployments reuse them.
+HTTPS and the health endpoint were verified during deployment. Google login and
+a complete transcription must also be checked on the deployed hostname.
 
 ## Checks
 
@@ -217,10 +247,8 @@ pnpm build
 node --test tests/*.test.mjs
 ```
 
-Both Docker images built successfully during deployment preparation. Production
-Compose and Caddy configuration validation passed, the local HTTP health endpoint
-responded successfully, and all 76 backend tests passed. These checks do not
-replace testing Google login and a real transcription on the deployed hostname.
+Run these checks after application changes. Passing tests and health checks do
+not replace testing Google login and a real transcription on the deployed hostname.
 
 ## Troubleshooting
 

@@ -1,13 +1,15 @@
-# AWS-ready Docker deployment
+# AWS Docker deployment
 
-The production configuration is prepared, but no AWS resources have been created.
+The app has been deployed on Ubuntu EC2 using an uploaded source archive.
+Local edits and GitHub pushes do not update that deployment automatically.
+There is currently no GitHub Actions deployment workflow.
 All Docker commands run from the repository root. One root `Dockerfile` builds
 the backend and web targets. Local development uses `compose.yml`; production
 uses `compose.production.yml`. No Dockerfile or Compose file is needed in backend/.
 Production creates a separate, initially empty database and audio volume. It does
 not transfer existing users or recordings from your computer.
 
-## Prepared locally
+## Production configuration
 
 - Frontend and API share one HTTPS origin. Refresh cookies retain their `/auth` path.
 - Caddy obtains and renews certificates and redirects HTTP to HTTPS.
@@ -18,7 +20,7 @@ not transfer existing users or recordings from your computer.
 - `.env.production` contains fresh database/JWT secrets and your existing Google/Groq
   settings. It is excluded from version control and the transfer archive.
 
-## 1. Choose the future hostname
+## 1. Configure the hostname
 
 Edit `.env.production` locally and set `DOMAIN='transcribe.your-domain.com'`.
 Use a hostname only, without a URL scheme, port, or path. Keep the other secrets.
@@ -31,9 +33,9 @@ backend/.venv/bin/python deploy/init-env.py
 In Google Cloud → Google Auth Platform → Clients → your web client, add
 `https://transcribe.your-domain.com` under Authorized JavaScript origins.
 Keep the localhost origins for development. This login implementation does not
-need a redirect URI. These steps need your actual hostname and remain pending.
+need a redirect URI. Use the exact HTTPS origin for your deployment.
 
-## 2. Future AWS configuration
+## 2. AWS configuration for a new server
 
 Create an Ubuntu 24.04 x86-64 EC2 instance; 2 vCPUs and 4 GB RAM are a starting
 estimate, not a measured capacity guarantee. Allow enough disk for container
@@ -64,7 +66,7 @@ scp -i KEY.pem deploy/transcription.tar.gz .env.production ubuntu@SERVER_IP:~/tr
 ssh -i KEY.pem ubuntu@SERVER_IP
 ```
 
-## 4. Install and start on the future server
+## 4. Install and start on the server
 
 ```bash
 cd ~/transcription
@@ -88,11 +90,56 @@ do not verify Google login, Groq credentials, or a complete transcription.
 sudo docker compose --env-file .env.production -f compose.production.yml logs --tail=100 backend web
 ```
 
-For updates, copy and extract a new archive, then rerun `up -d --build --wait`.
+For updates, run this on your computer from the repository root, replacing
+`KEY.pem` and `SERVER_IP`:
+
+```bash
+bash deploy/package.sh
+scp -i KEY.pem deploy/transcription.tar.gz ubuntu@SERVER_IP:~/transcription/
+ssh -i KEY.pem ubuntu@SERVER_IP
+```
+
+Then run on the server:
+
+```bash
+cd ~/transcription
+tar -xzf transcription.tar.gz
+sudo docker compose --env-file .env.production -f compose.production.yml up -d --build --wait
+sudo docker compose --env-file .env.production -f compose.production.yml ps
+curl --fail https://transcribe.your-domain.com/health
+```
+
+Use your actual hostname in the health check. Archive extraction overwrites
+included files but does not delete files removed from the source; review removed
+or renamed application files during an update. Use `deploy/package.sh` rather
+than archiving the whole working directory, which could include secrets.
+Routine code updates do not require uploading the environment file again.
 Keep the same `.env.production` and Compose project name so volumes and credentials
 remain consistent. Do not run `down -v`: it deletes the persistent volumes.
 Back up both PostgreSQL and the audio volume before schema-changing updates;
 Docker volumes survive container replacement but are not off-server backups.
+
+## Rotate the Groq API key
+
+1. Create a replacement API key in your Groq account. Keep it out of Git and chat.
+2. Edit `GROQ_API_KEY` in local `backend/.env` and `.env.production` where used.
+3. On EC2, edit the same setting in `~/transcription/.env.production`, preserving
+   the existing database password, JWT secret, domain, and other settings.
+4. From `~/transcription`, recreate the backend to load the changed environment:
+
+   ```bash
+   chmod 600 .env.production
+   sudo docker compose --env-file .env.production -f compose.production.yml up -d --no-deps --force-recreate --wait backend
+   ```
+
+5. Restart any local backend using the old key. Test an actual transcription
+   locally and in production; `/health` does not validate the Groq key.
+6. Revoke the old key in Groq after verifying the replacement. Revoke it immediately
+   if there is evidence of misuse.
+
+Removing a credential from Git history does not rotate it. Rotation must be
+completed separately. Do not regenerate the entire production environment file
+on an existing deployment merely to replace the Groq key.
 
 ## Stop and restart
 

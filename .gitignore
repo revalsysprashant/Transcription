@@ -8,3 +8,37 @@ comparison*/
 **/__pycache__/
 **/dist/
 backend/app/storage/
+# Environment files and secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+
+# Python
+**/.venv/
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+.coverage
+htmlcov/
+
+# Frontend
+**/node_modules/
+**/dist/
+
+# Local recordings and comparison output
+backend/app/storage/
+comparison*/
+
+# Deployment archives
+deploy/*.tar.gz
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db

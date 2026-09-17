@@ -10,6 +10,8 @@ wheels/
 .venv
 
 .env
+.env.production
+.env.development
 
 # Local uploaded audio
 storage/

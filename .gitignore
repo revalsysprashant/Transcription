@@ -1,0 +1,10 @@
+.env.docker
+.env.production
+deploy/*.tar.gz
+comparison*/
+**/.env
+**/.venv/
+**/node_modules/
+**/__pycache__/
+**/dist/
+backend/app/storage/

@@ -1,174 +1,269 @@
 # Audio Transcription
 
-Record audio in your browser or upload a file, transcribe speech with Groq Whisper,
-and save the original recording and transcript. Sign in with Google to access your
-own saved jobs and export transcripts as TXT, SRT, or VTT.
+Record or upload audio, sign in with Google, and get a transcript using Groq Whisper.
+Download transcripts as TXT, SRT, or VTT. The default upload limits are **25 MB**
+and **60 minutes** per recording.
 
-## How it works
+## Start here
 
-```text
-React frontend → FastAPI → FFprobe validation → FFmpeg normalization
-                        → Silero speech detection → Groq Whisper
-                        → PostgreSQL transcript + original audio on disk
+This guide runs the complete app on your computer with Docker. Docker installs
+Python, Node, FFmpeg, PostgreSQL, and the app dependencies inside containers.
+You do not need to install those separately.
+
+Use a **Bash terminal on Linux, macOS, or Windows WSL**. Commands below run in the
+same terminal, from the repository root unless a step says otherwise. Paste only
+the contents of code blocks. Finish each step before continuing.
+
+Already have the app working? Jump to [daily commands](#daily-commands).
+Updating the AWS website? Follow [the deployment guide](deploy/README.md).
+
+## 1. Check Docker and get the code
+
+You need Git, Docker with Docker Compose, and OpenSSL. Check them:
+
+```bash
+git --version
+docker --version
+docker compose version
+openssl version
 ```
 
-The backend converts audio to mono 16 kHz PCM WAV, detects speech, transcribes
-speech clips, and maps timestamps back to the original recording. Processing runs
-during the upload request; there is no background queue or WebSocket job stream.
-Temporary processing files are removed after the request.
+Each command should print a version. If Docker is missing, install Docker Desktop
+on macOS/Windows, or Docker Engine with the Compose plugin on Linux. Start Docker
+Desktop before continuing if you use it.
 
-When speech detection retains less than 60% of a recording, the backend sends the
-complete normalized audio instead if it is at most 20 MB. This protects music and
-other continuous audio that a voice detector can classify poorly. Larger files
-continue through the sentence-aware clipping path. Both thresholds can be changed
-with `FULL_AUDIO_FALLBACK_COVERAGE_RATIO` and `FULL_AUDIO_FALLBACK_MAX_MB`.
+If you **already have this repository**, enter its folder. On the original computer:
 
-Default limits are **25 MB** and **60 minutes** per recording. Microphone recording
-requires localhost or HTTPS. Transcription requires an internet connection and a
-working Groq API key.
+```bash
+cd /home/yg/Transcription
+```
 
-## App flow
+On another computer, clone it once:
 
-Open [app-flow.excalidraw](app-flow.excalidraw) in Excalidraw for one editable
-flow covering sign-in, audio processing, transcription, storage, and results.
+```bash
+git clone https://github.com/revalsysprashant/Transcription.git
+cd Transcription
+```
 
-## GitHub and secrets
+Confirm you are in the correct folder and Docker is running:
 
-The repository is `https://github.com/revalsysprashant/Transcription`.
-From the repository root, review and push changes:
+```bash
+ls Dockerfile compose.yml
+docker info
+```
+
+If Docker reports a permission error on Linux, fix your Docker installation's user
+permissions before continuing. Avoid switching between `sudo docker` and ordinary
+`docker` throughout this guide.
+
+## 2. Get the two account settings
+
+You need these before the app can sign in and transcribe:
+
+| Setting | Where it comes from | What to copy |
+| --- | --- | --- |
+| Google client ID | Google Cloud Console → Google Auth Platform → Clients | A **Web application** client ID ending in `.apps.googleusercontent.com` |
+| Groq API key | Groq Console → API Keys | A newly created API key |
+
+In your Google web client, add this exact **Authorized JavaScript origin**:
+
+```text
+http://localhost:8080
+```
+
+Use no trailing slash. This app does not need a redirect URI. If your Google app
+is in testing mode, add your sign-in email as a test user when required by your
+Google project configuration. A Google **client secret** is not used by this app.
+
+## 3. Create the local settings once
+
+The next block asks for your client ID and API key, generates random secrets, and
+creates `backend/.env` and `.env.docker`. The API key is hidden while you type.
+It refuses to overwrite either existing file.
+
+```bash
+(
+  set -eu
+  umask 077
+  if [ -e backend/.env ] || [ -e .env.docker ]; then
+    echo 'Settings already exist. Keep them; use the editing instructions below.'
+    exit 1
+  fi
+  read -r -p 'Paste Google client ID: ' setup_google_id
+  read -r -s -p 'Paste Groq API key (hidden): ' setup_groq_key
+  printf '\n'
+  test -n "$setup_google_id" && test -n "$setup_groq_key"
+  setup_db_password=$(openssl rand -hex 32)
+  setup_jwt_secret=$(openssl rand -hex 48)
+  set -C
+  printf '%s\n' \
+    "GOOGLE_CLIENT_ID=$setup_google_id" \
+    "GROQ_API_KEY=$setup_groq_key" \
+    "JWT_SECRET=$setup_jwt_secret" \
+    'MAX_AUDIO_SIZE_MB=25' \
+    'MAX_AUDIO_DURATION_SECONDS=3600' > backend/.env
+  printf '%s\n' \
+    "POSTGRES_PASSWORD=$setup_db_password" \
+    "GOOGLE_CLIENT_ID=$setup_google_id" > .env.docker
+  echo 'Created backend/.env and .env.docker.'
+)
+```
+
+**If settings already exist:** keep them and edit them in your text editor.
+`backend/.env` needs `GOOGLE_CLIENT_ID`, `GROQ_API_KEY`, and `JWT_SECRET`.
+`.env.docker` needs `POSTGRES_PASSWORD` and the same `GOOGLE_CLIENT_ID`.
+Do not change an existing database password simply to rerun setup: PostgreSQL
+retains the password established when its volume was first created.
+
+For a partially completed setup, create only the missing file using these field
+names. Generate any missing random password or JWT secret with `openssl rand -hex 32`.
+Never paste real credentials into GitHub, screenshots, or chat.
+
+Compose supplies the container's database URL automatically. This Docker setup
+does not require `frontend/.env` or a locally installed Python environment.
+
+## 4. Build and start the app
+
+```bash
+docker compose --env-file .env.docker config --quiet
+docker compose --env-file .env.docker up -d --build --wait
+docker compose --env-file .env.docker ps
+curl --fail http://localhost:8080/health
+```
+
+The first command succeeds silently. The first build can take several minutes
+while downloading dependencies. The last command should print:
+
+```json
+{"status":"ok"}
+```
+
+Open **http://localhost:8080** in your browser. Sign in with Google, select a short
+recording, and click **Upload and transcribe**. Microphone recording works on
+localhost and HTTPS. Successful health checks alone do not test Google or Groq;
+complete one real transcription to verify both.
+
+## Daily commands
+
+Run these from the repository root.
+
+**Start the existing app:**
+
+```bash
+docker compose --env-file .env.docker up -d --wait
+```
+
+**Apply code or environment changes:**
+
+```bash
+docker compose --env-file .env.docker up -d --build --wait
+```
+
+**See errors:**
+
+```bash
+docker compose --env-file .env.docker logs --tail=100 backend web db
+```
+
+**Stop while keeping recordings and database data:**
+
+```bash
+docker compose --env-file .env.docker down
+```
+
+Do not add `-v`: that deletes the named storage volumes. Volumes survive container
+replacement, but are not backups.
+
+## Push changes to GitHub
 
 ```bash
 git remote -v
 git status
 git add -A
 git diff --cached --stat
-# Review staged content locally before committing; do not share secret values.
 git diff --cached
 git commit -m "Describe your changes"
 SSH_ASKPASS_REQUIRE=never git push -u origin main
 ```
 
-SSH uses the key registered with your GitHub account. Its passphrase is the one
-you chose when creating the key, not your GitHub password.
+Review the staged changes before committing. If there is nothing to commit,
+skip the commit and push. If SSH asks for a passphrase, use the passphrase chosen
+when creating your SSH key. HTTPS remotes use GitHub authentication instead.
 
-The root `.gitignore` excludes environment files, private keys, dependencies,
-build output, recordings, comparison output, and deployment archives. Sanitized
-`.env.example` templates can be committed. Never commit real credentials.
-Ignoring a file does not untrack it or remove earlier committed copies.
+The root `.gitignore` excludes environment files, keys, dependencies, local audio,
+comparison output, and deployment archives. Sanitized `.env.example` templates
+are allowed. `.gitignore` does not remove files already tracked or in old commits.
+If GitHub blocks a secret, remove it from every affected commit and rotate it;
+do not bypass protection for a real credential. Coordinate history changes if
+other people already use the affected branch.
 
-If GitHub blocks a push for a secret, remove the secret from every affected
-commit before retrying; a new deletion commit is insufficient. Preserve local
-configuration before rewriting history, and coordinate any rewrite of already
-published commits. Do not bypass push protection for a real credential. Rotate
-exposed credentials and update each environment that uses them; see the
-[deployment guide](deploy/README.md#rotate-the-groq-api-key).
+**Pushing to GitHub does not update the AWS website.** Automatic deployment is
+not configured. Use [manual deployment instructions](deploy/README.md).
 
-A GitHub push does not deploy the website. Automatic deployment is not configured;
-follow the [manual update steps](deploy/README.md#logs-and-updates).
+## Common problems
 
-## Local Docker setup
+| What you see | What to do |
+| --- | --- |
+| `no configuration file provided` | Enter the repository folder containing `compose.yml`. |
+| `Set POSTGRES_PASSWORD` or `Set GOOGLE_CLIENT_ID` | Complete step 3 and include `--env-file .env.docker` in Compose commands. |
+| Cannot connect to Docker | Start Docker Desktop or the Docker service, then rerun `docker info`. |
+| Port 8080 already in use | Stop the other application using that port. |
+| Database password authentication failed | Restore the password used when this database volume was created. Editing the file alone does not change PostgreSQL's password. |
+| Google sign-in fails | Check the exact origin `http://localhost:8080` and matching client IDs in both environment files, then rebuild. |
+| Provider/transcription error | Check `GROQ_API_KEY` and the backend logs. Recreate the backend after changing its environment. |
+| Upload rejected | Use a file no larger than 25 MB and no longer than 60 minutes. |
+| No speech detected | Try a short recording with clear speech. |
+| Build/start fails | Read the first error, then run the logs command above. Do not delete volumes as a troubleshooting shortcut. |
 
-Run commands from the project root. You need Docker Engine with Docker Compose,
-a Google OAuth web client, and a Groq API key. Python, Node, FFmpeg, and the speech
-model dependencies are installed inside the images.
+## How the app works
 
-### 1. Configure the backend
-
-If `backend/.env` does not already exist, copy the example:
-
-```bash
-cp -n backend/.env.example backend/.env
-```
-
-Edit `backend/.env` and set `GOOGLE_CLIENT_ID`, `GROQ_API_KEY`, and a long random
-`JWT_SECRET`. Docker overrides `DATABASE_URL`, debug mode, cookie security, and
-audio storage for its own environment. Keep credentials out of version control.
-
-### 2. Configure Docker
-
-If `.env.docker` already exists, keep it. Otherwise create it:
-
-```bash
-(umask 077; set -C; cat > .env.docker <<'ENV'
-POSTGRES_PASSWORD=REPLACE_WITH_A_RANDOM_HEX_PASSWORD
-GOOGLE_CLIENT_ID=REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID
-ENV
-)
-```
-
-Replace both placeholders. Use the same Google client ID as `backend/.env`.
-Generate random secrets with `openssl rand -hex 32`; use separate values for the
-JWT secret and database password. Use a hexadecimal database password so it is
-safe to embed in the database URL.
-
-### 3. Configure Google sign-in
-
-In Google Cloud Console, select your project, then open **Google Auth Platform →
-Clients → your Web application client**. Add this Authorized JavaScript origin:
+Open [app-flow.excalidraw](app-flow.excalidraw) in Excalidraw for the single editable
+app diagram.
 
 ```text
-http://localhost:8080
+Browser → Caddy → FastAPI → FFprobe / FFmpeg → Silero → Groq Whisper
+                       → PostgreSQL transcript + original audio volume
 ```
 
-Keep `http://localhost:5173` too if you use the Vite development server. This app
-uses Google's credential callback; it does not require an OAuth redirect URI.
+The backend normalizes audio, detects speech, groups clips with padding and
+overlap, and combines results using original timestamps. When detected speech
+covers less than 60% of a recording and the normalized WAV is at most 20 MB, it
+uses the full audio instead. No detected speech produces an empty transcript
+without a Groq request. Temporary processing files are removed after the request.
 
-### 4. Build and start
+`Dockerfile` builds the backend and frontend images. `compose.yml` runs the local
+stack; `compose.production.yml` runs the public HTTPS stack. Their databases and
+audio volumes are separate.
 
-```bash
-docker compose --env-file .env.docker up -d --build --wait
-docker compose --env-file .env.docker ps
-curl --fail http://localhost:8080/health
-```
+## Optional: development without app containers
 
-Open **http://localhost:8080**. The first build downloads the speech-processing
-dependencies. PostgreSQL starts first, then the backend applies Alembic migrations,
-and Caddy serves the frontend and proxies API requests on the same origin.
-The health endpoint should return `{"status":"ok"}`.
+This is a separate workflow for developers who need hot reload. Use the Docker
+steps above if you simply want to run the app. This workflow requires Python
+3.12+, uv, Node.js 24, pnpm 11.22.0, FFmpeg/FFprobe, and Docker on your computer.
 
-Sign in, record a short clip, stop recording, then click **Upload and transcribe**.
-The **Selected: recording-…** line identifies the recording even when the separate
-file picker says **No file chosen**. Keep the returned job ID to reopen it later.
-
-### Logs, updates, and stopping
-
-```bash
-# View recent errors
-docker compose --env-file .env.docker logs --tail=100 backend web
-
-# Rebuild after code changes
-docker compose --env-file .env.docker up -d --build --wait
-
-# Stop containers while preserving data
-docker compose --env-file .env.docker down
-```
-
-Database and audio data live in named Docker volumes. Do not add `-v` to `down`
-unless you intend to delete them. Keep your database password unchanged after
-initialization; editing the environment file does not rotate an existing database
-password. Volumes are persistent storage, not backups.
-
-## Local development without app containers
-
-You need Python 3.12+, uv, Node.js compatible with the frontend dependencies,
-pnpm, and FFmpeg/FFprobe on your PATH. The backend lockfile selects CPU builds for
-the speech-processing libraries.
-
-From the project root, start the development PostgreSQL container (create
-`.env.docker` as described above first):
+With `.env.docker` configured, start only the development database:
 
 ```bash
 docker compose --env-file .env.docker --profile development up -d --wait dev-db
 ```
 
-Set this development database URL in `backend/.env`, along with your Google/Groq
-credentials and JWT secret:
+In `backend/.env`, keep your Google/Groq/JWT settings and set:
 
 ```dotenv
 DATABASE_URL=postgresql+asyncpg://transcription:transcription@localhost:5433/transcription_db
+APP_ENV=development
+DEBUG=true
+COOKIE_SECURE=false
 ```
 
-Start the backend in one terminal:
+Create `frontend/.env` with your actual client ID:
+
+```dotenv
+VITE_GOOGLE_CLIENT_ID=REPLACE_WITH_YOUR_CLIENT_ID.apps.googleusercontent.com
+```
+
+Also add `http://localhost:5173` to Google's Authorized JavaScript origins.
+In a terminal from the repository root:
 
 ```bash
 cd backend
@@ -177,8 +272,7 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-Set `VITE_GOOGLE_CLIENT_ID` in `frontend/.env` to the same Google client ID. Then,
-in another terminal:
+Keep that terminal running. In another terminal from the repository root:
 
 ```bash
 cd frontend
@@ -186,80 +280,14 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open **http://localhost:5173**. Development API requests default to
-`http://localhost:8000`; `VITE_API_URL` can override that address. Docker builds set
-it to an empty string so requests use the website's own origin.
+Open **http://localhost:5173**. This uses a separate development database on port
+5433; it does not copy data from the Docker app or AWS.
 
-The development database, local Docker database, and production database are
-separate. Switching between them does not migrate existing users or recordings.
+## Optional: run tests
 
-## Production / AWS deployment
-
-The app has been deployed to an Ubuntu EC2 server using an uploaded archive.
-See **[the deployment guide](deploy/README.md)**
-for server installation, DNS, firewall rules, Google sign-in, HTTPS, transfer, and
-startup commands.
-
-| File | Purpose |
-| --- | --- |
-| [compose.yml](compose.yml) | Local Docker stack at localhost:8080 |
-| [compose.production.yml](compose.production.yml) | Public HTTPS stack with secure cookies and private API/database ports |
-| [deploy/Caddyfile](deploy/Caddyfile) | HTTPS, certificate renewal, frontend serving, and API proxy |
-| [deploy/install-docker-ubuntu.sh](deploy/install-docker-ubuntu.sh) | Docker and Compose installer for Ubuntu |
-| [deploy/init-env.py](deploy/init-env.py) | Creates production secrets without overwriting an existing file |
-| [deploy/package.sh](deploy/package.sh) | Creates a transfer archive without secrets or recordings |
-
-If `.env.production` is missing, generate it once after installing backend
-dependencies with `uv sync --locked`:
+After installing the development dependencies above, from the repository root:
 
 ```bash
-backend/.venv/bin/python deploy/init-env.py
+(cd backend && uv run python -m pytest -q)
+(cd frontend && pnpm build && node --test tests/*.test.mjs)
 ```
-
-Set `DOMAIN` in `.env.production` to your actual hostname, without `https://` or a
-path. The script reuses your Google/Groq settings and creates fresh database and
-JWT secrets. Keep this file private and transfer it separately over SSH.
-
-Validate the production configuration and create the transfer archive:
-
-```bash
-docker compose --env-file .env.production -f compose.production.yml config --quiet
-bash deploy/package.sh
-```
-
-The archive is written to `deploy/transcription.tar.gz` and is excluded from Git.
-A first deployment creates storage volumes; subsequent deployments reuse them.
-HTTPS and the health endpoint were verified during deployment. Google login and
-a complete transcription must also be checked on the deployed hostname.
-
-## Checks
-
-Run backend tests from `backend/` after `uv sync --locked`:
-
-```bash
-uv run python -m pytest -q
-```
-
-Run frontend checks from `frontend/` after installing dependencies:
-
-```bash
-pnpm build
-node --test tests/*.test.mjs
-```
-
-Run these checks after application changes. Passing tests and health checks do
-not replace testing Google login and a real transcription on the deployed hostname.
-
-## Troubleshooting
-
-- **Failed to fetch:** check backend health and logs. In development, start the API
-  on port 8000. In Docker, use localhost:8080 and check the Caddy/backend services.
-- **Google sign-in fails:** verify matching frontend/backend client IDs and the
-  exact Authorized JavaScript origin, including scheme and port. Rebuild the
-  frontend image after changing its client ID.
-- **Transcription provider error:** check the Groq API key and provider availability;
-  inspect backend logs for the failing request.
-- **No speech detected:** try a clear recording and check microphone input. Recording
-  and playback happen locally, while transcription needs the backend and Groq.
-- **HTTPS unavailable:** check the production hostname, DNS, and inbound ports
-  80/443. Follow the deployment guide before exposing the production stack.

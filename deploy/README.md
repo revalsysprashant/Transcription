@@ -9,6 +9,67 @@ uses `compose.production.yml`. No Dockerfile or Compose file is needed in backen
 Production creates a separate, initially empty database and audio volume. It does
 not transfer existing users or recordings from your computer.
 
+## Update the existing AWS website
+
+Use this section if the server is already running. You do not need to create a
+new server, database, or environment file for each code change.
+
+**On your computer**, open a Bash terminal in the repository root. The prompts
+let you supply the server details without editing the commands:
+
+```bash
+read -r -p 'Server public IP (current server: 65.2.211.225): ' deploy_server
+read -r -p 'Full SSH key path (example: /home/yg/.ssh/transcription-aws.pem): ' deploy_key
+chmod 600 "$deploy_key"
+bash deploy/package.sh
+scp -i "$deploy_key" deploy/transcription.tar.gz "ubuntu@$deploy_server:~/transcription/"
+ssh -i "$deploy_key" "ubuntu@$deploy_server"
+```
+
+Enter actual values at both prompts; the examples are not automatic defaults.
+The AWS SSH key is separate from your GitHub SSH key. If SSH times out, check
+that the server security group permits port 22 from your current public IP.
+If packaging or uploading fails, stop and fix that error before connecting.
+
+You are now **on the server**. Paste:
+
+```bash
+cd ~/transcription
+tar -xzf transcription.tar.gz
+sudo docker compose --env-file .env.production -f compose.production.yml config --quiet
+sudo docker compose --env-file .env.production -f compose.production.yml up -d --build --wait
+sudo docker compose --env-file .env.production -f compose.production.yml ps
+curl --fail https://transcribe.65-2-211-225.sslip.io/health
+```
+
+The health check should print `{"status":"ok"}`. If you change the hostname, use
+the new hostname in that command. Open the website and test sign-in and a real
+transcription. Leave the server terminal with:
+
+```bash
+exit
+```
+
+The archive excludes secrets. Keep the server's existing `.env.production` and
+persistent volumes. Extraction does not delete old files: if your change removes
+or renames source files, review those obsolete files on the server before rebuilding.
+
+If startup fails, run this **on the server** and inspect the error:
+
+```bash
+cd ~/transcription
+sudo docker compose --env-file .env.production -f compose.production.yml logs --tail=100 backend web db
+```
+
+Do not run `down -v` or regenerate database credentials to fix an update error.
+There may be a short interruption while containers are replaced; this setup does
+not provide zero-downtime deployment or automatic rollback.
+
+## First deployment to a new server
+
+The remaining setup sections apply to a **new server**. Skip them for ordinary
+updates to the existing website. Run local commands from the repository root.
+
 ## Production configuration
 
 - Frontend and API share one HTTPS origin. Refresh cookies retain their `/auth` path.
@@ -24,11 +85,38 @@ not transfer existing users or recordings from your computer.
 
 Edit `.env.production` locally and set `DOMAIN='transcribe.your-domain.com'`.
 Use a hostname only, without a URL scheme, port, or path. Keep the other secrets.
-If the file is missing, generate it once from the project root:
+If the file already exists, keep it. For a first deployment, create it using this
+Bash block on your computer. It generates separate production database and JWT
+secrets and asks for the account settings; no local Python installation is needed:
 
 ```bash
-backend/.venv/bin/python deploy/init-env.py
+(
+  set -eu
+  umask 077
+  if [ -e .env.production ]; then
+    echo '.env.production already exists; keeping it unchanged.'
+    exit 1
+  fi
+  read -r -p 'Public hostname, without https://: ' setup_domain
+  read -r -p 'Google web client ID: ' setup_google_id
+  read -r -s -p 'Groq API key (hidden): ' setup_groq_key
+  printf '\n'
+  test -n "$setup_domain" && test -n "$setup_google_id" && test -n "$setup_groq_key"
+  setup_db_password=$(openssl rand -hex 32)
+  setup_jwt_secret=$(openssl rand -hex 48)
+  set -C
+  printf '%s\n' \
+    "DOMAIN=$setup_domain" \
+    "POSTGRES_PASSWORD=$setup_db_password" \
+    "JWT_SECRET=$setup_jwt_secret" \
+    "GOOGLE_CLIENT_ID=$setup_google_id" \
+    "GROQ_API_KEY=$setup_groq_key" > .env.production
+  echo 'Created .env.production.'
+)
 ```
+
+Keep this file out of Git. Do not use this block to rotate one setting on an
+existing deployment; edit only that setting instead.
 
 In Google Cloud → Google Auth Platform → Clients → your web client, add
 `https://transcribe.your-domain.com` under Authorized JavaScript origins.
